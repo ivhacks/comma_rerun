@@ -17,7 +17,7 @@ import zmq
 
 from openpilot.cereal import log
 
-HOST = "172.20.10.11"
+HOST = "192.168.62.213"
 MAX_HZ = 20.0
 
 # Mirrors get_port() in cereal/messaging/bridge_zmq.cc: the bridge derives each

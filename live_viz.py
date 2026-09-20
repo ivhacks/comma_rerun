@@ -90,7 +90,13 @@ def draw_destination(to_pixel, latlon):
                                         labels=[f"{latlon[0]:.6f}, {latlon[1]:.6f}"]))
 
 
-rr.init("comma-live", spawn=True)
+# Connect to a standing viewer when one is up: a spawned viewer dies with the
+# script and has crashed under load, taking the stream with it.
+rr.init("comma-live")
+try:
+  rr.connect_grpc("rerun+http://127.0.0.1:9876/proxy")
+except Exception:
+  rr.spawn()
 
 # Rolling window, unlike the offline template: live data is always at the right
 # edge. cursor_relative(0) pins the right edge to the playhead, which rerun keeps
