@@ -29,6 +29,7 @@ def main() -> None:
     raise SystemExit(f"no segments for {args.route} under {root}")
 
   t0 = None
+  wall_offset = None  # wallTimeNanos - logMonoTime, from the clocks message
   cs_t, blinker, pressed, angle, v = [], [], [], [], []
   cc_t, cmd, lat_active = [], [], []
   co_t, sent = [], []
@@ -37,6 +38,9 @@ def main() -> None:
     try:
       for m in LogReader(str(s)):
         w = m.which()
+        if w == "clocks" and wall_offset is None:
+          wall_offset = m.clocks.wallTimeNanos - m.logMonoTime
+          continue
         if w not in ("carState", "carControl", "carOutput"):
           continue
         t = m.logMonoTime * 1e-9
@@ -63,9 +67,13 @@ def main() -> None:
     except Exception as e:
       print(f"  skipped {s.parent.name}: {type(e).__name__}")
 
+  # epoch seconds of t=0, so the viewer can show wall-clock time
+  t_start_epoch = (t0 * 1e9 + wall_offset) / 1e9 if wall_offset is not None else 0.0
+
   out = root / f"{args.route}.npz"
   np.savez_compressed(
     out,
+    t_start_epoch=np.array(t_start_epoch),
     cs_t=np.array(cs_t), blinker=np.array(blinker), pressed=np.array(pressed),
     angle=np.array(angle), v_ego=np.array(v),
     cc_t=np.array(cc_t), cmd=np.array(cmd), lat_active=np.array(lat_active),
