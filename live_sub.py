@@ -8,7 +8,9 @@ Runs in openpilot's environment (3.12, needs cereal + pyzmq):
 Requires ./openpilot/cereal/messaging/bridge running on the device.
 """
 import json
+import subprocess
 import sys
+import threading
 import time
 
 import zmq
@@ -26,6 +28,33 @@ START_PORT = 8023
 MAX_PORT = 65535
 
 SERVICES = ("carState", "carControl", "carOutput", "gpsLocationExternal")
+
+DEST_POLL_SECONDS = 2.0
+
+
+def poll_destination():
+  """ParkingDestination is a param on the device, not a cereal message, so the only
+  way to see it change is to read the file. Emits only on change."""
+  last = None
+  while True:
+    try:
+      out = subprocess.run(
+        ["ssh", "-n", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no",
+         "-o", "ConnectTimeout=5", f"comma@{HOST}",
+         "cat /data/params/d/ParkingDestination 2>/dev/null"],
+        capture_output=True, text=True, timeout=10).stdout.strip()
+    except Exception:
+      out = ""
+    if out != last:
+      last = out
+      try:
+        d = json.loads(out)
+        print(json.dumps({"t": time.time(),
+                          "v": {"dest_lat": float(d["latitude"]),
+                                "dest_lon": float(d["longitude"])}}), flush=True)
+      except Exception:
+        pass
+    time.sleep(DEST_POLL_SECONDS)
 
 
 def port_for(name):
@@ -65,6 +94,7 @@ for name in SERVICES:
   by_sock[sock] = name
 
 print(json.dumps({"_meta": "subscribed", "host": HOST}), flush=True)
+threading.Thread(target=poll_destination, daemon=True).start()
 
 min_dt = 1.0 / MAX_HZ
 last = dict.fromkeys(SERVICES, 0.0)

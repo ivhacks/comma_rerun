@@ -22,7 +22,7 @@ WINDOW_SECONDS = 30.0
 
 # Destination to mark on the map, matching the ParkingDestination param. The param
 # itself is CLEAR_ON_MANAGER_START so it does not survive a reboot; set it here too.
-DEST = None  # e.g. (32.7541944, -117.1949356)
+DEST = None  # fallback if the device param is unset; live_sub streams the real one
 
 # Esri World Imagery: web-mercator tiles, no API key unlike Mapbox or Google.
 TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -83,6 +83,13 @@ PATHS = {
   "angle": ("steeringAngleDeg", 1.0),
 }
 
+def draw_destination(to_pixel, latlon):
+  """Not static: the param can change mid-drive and the marker has to move with it."""
+  dx, dy = to_pixel(*latlon)
+  rr.log("map/destination", rr.Points2D([[dx, dy]], radii=11.0, colors=(80, 255, 140),
+                                        labels=[f"{latlon[0]:.6f}, {latlon[1]:.6f}"]))
+
+
 rr.init("comma-live", spawn=True)
 
 # Rolling window, unlike the offline template: live data is always at the right
@@ -115,6 +122,7 @@ for path, (color, name, width) in STYLE.items():
 
 to_pixel = None   # set once the first fix arrives and the tiles are fetched
 trail = []
+dest = DEST       # updated live from the device's ParkingDestination param
 n = 0
 
 for line in sys.stdin:
@@ -131,17 +139,22 @@ for line in sys.stdin:
 
   rr.set_time(TIMELINE, timestamp=rec["t"] + UTC_OFFSET)
 
+  if "dest_lat" in rec["v"]:
+    dest = (rec["v"]["dest_lat"], rec["v"]["dest_lon"])
+    print(f"destination -> {dest[0]:.6f},{dest[1]:.6f}", file=sys.stderr)
+    if to_pixel is not None:
+      draw_destination(to_pixel, dest)
+    continue
+
   if "lat" in rec["v"]:
     lat, lon = rec["v"]["lat"], rec["v"]["lon"]
     if to_pixel is None:
       # centre on the first fix, so the view is always where the car actually is
       im, to_pixel = build_map(lat, lon)
       rr.log("map", rr.Image(np.asarray(im)), static=True)
-      if DEST is not None:
-        dx, dy = to_pixel(*DEST)
-        rr.log("map/destination", rr.Points2D([[dx, dy]], radii=10.0,
-                                              colors=(80, 255, 140)), static=True)
       print(f"map built at {lat:.6f},{lon:.6f}", file=sys.stderr)
+      if dest is not None:
+        draw_destination(to_pixel, dest)
 
     x, y = to_pixel(lat, lon)
     trail.append((x, y))
