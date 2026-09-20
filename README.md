@@ -15,10 +15,22 @@ rlog.zst --[ extract.py, openpilot 3.12 ]--> route.npz --[ viz.py, 3.14 ]--> Rer
 
 ## Use
 
+Offline, from a route's rlogs:
+
 ```bash
-cd ~/openpilot && uv run python ~/comma_rerun/extract.py 00000011 --dir ~/steering-test
-python3 ~/comma_rerun/viz.py ~/steering-test/00000011.npz --start 84 --end 142
+cd ~/openpilot && uv run python ~/comma_rerun/extract.py
+python3 ~/comma_rerun/viz.py
 ```
+
+Live, from a device (`live` branch):
+
+```bash
+./setup_device.sh 172.20.10.11
+cd ~/openpilot && uv run python ~/comma_rerun/live_sub.py | python3 ~/comma_rerun/live_viz.py
+```
+
+`setup_device.sh` starts the cereal ZMQ bridge and, on ublox devices, `pigeond` +
+`ubloxd`. None of that survives a reboot, so re-run it after one.
 
 ## Adding signals
 
