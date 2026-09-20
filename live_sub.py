@@ -25,7 +25,7 @@ FNV_PRIME = 0x100000001B3
 START_PORT = 8023
 MAX_PORT = 65535
 
-SERVICES = ("carState", "carControl", "carOutput")
+SERVICES = ("carState", "carControl", "carOutput", "gpsLocationExternal")
 
 
 def port_for(name):
@@ -42,9 +42,14 @@ def fields(evt, which):
             "angle": c.steeringAngleDeg}
   if which == "carControl":
     c = evt.carControl
-    return {"cmd": c.actuators.torque, "lat_active": float(c.latActive)}
-  # post rate-limit value the carcontroller actually put on CAN
-  return {"sent": evt.carOutput.actuatorsOutput.torqueOutputCan}
+    return {"cmd": c.actuators.curvature, "lat_active": float(c.latActive)}
+  if which == "carOutput":
+    # post rate-limit value the carcontroller actually put on CAN
+    return {"sent": evt.carOutput.actuatorsOutput.curvature}
+  g = evt.gpsLocationExternal
+  if not g.hasFix:
+    return {}
+  return {"lat": g.latitude, "lon": g.longitude}
 
 
 ctx = zmq.Context()
@@ -84,6 +89,7 @@ try:
       except Exception:
         continue
 
-      print(json.dumps({"t": time.time(), "v": vals}), flush=True)
+      if vals:
+        print(json.dumps({"t": time.time(), "v": vals}), flush=True)
 except (KeyboardInterrupt, BrokenPipeError):
   sys.exit(0)
